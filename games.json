@@ -1,0 +1,33 @@
+{
+  "games": [
+    {
+      "nome": "Memory Veneto",
+      "descrizione": "Spritz, gondole, radicchio e prosecco... Trova le coppie e dimostra la tua memoria da campion!",
+      "categoria": "2 Giocatori",
+      "cartella": "memory",
+      "file": "memory.html",
+      "immagine": "memory/memory logo.png"
+    },
+    {
+      "nome": "Ciapa el Radicio",
+      "descrizione": "El radicio scappa pa i campi. Ciapalo prima che sfugga! evita quelli marci, corvi e sassi.",
+      "cartella": "ciapa el radicio",
+      "file": "ciapa el radicio.html",
+      "immagine": "ciapa el radicio/ciapa el radicio logo.png"
+    },
+    {
+      "nome": "Salva el Vignal",
+      "descrizione": "Le nuvole de temporal minacciano el vigneto. Spara i tappi de prosecco e salva el raccolto!",
+      "cartella": "salva el vignal",
+      "file": "salva el vignal.html",
+      "immagine": "salva el vignal/salva el vignal logo.png"
+    },
+    {
+      "nome": "Traffic Canal",
+      "descrizione": "Gondole, vaporetti e barchette intasano el Canal Grande. Schivali senza fare incidenti!",
+      "cartella": "traffic canal",
+      "file": "traffic canal.html",
+      "immagine": "traffic canal/traffic canal logo.png"
+    }
+  ]
+}

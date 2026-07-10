@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ciapa el Radicio</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥬</text></svg>">
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body, html {
+    margin: 0; padding: 0;
+    width: 100%; height: 100%;
+    background-color: #87CEEB;
+    font-family: 'Fredoka One', cursive, sans-serif;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    user-select: none;
+    touch-action: none; /* Previene comportamenti di default su mobile come lo zoom o lo scroll */
+}
+
+#game-container {
+    position: relative;
+    width: 100%;
+    max-width: 600px;
+    height: 100%;
+    max-height: 800px;
+    background: linear-gradient(to bottom, #6cb2eb 0%, #b2e2f2 50%, #85c285 50%, #4a8c4a 100%);
+    box-shadow: 0 0 30px rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+
+.bg-decoration {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+}
+
+#trattore-bg {
+    left: 5%; top: 45%;
+    width: 530px; max-width: 63%;
+}
+
+#cartello-bg {
+    right: 5%; top: 35.3%;
+    width: 200px; max-width: 40%;
+}
+
+/* UI Layer */
+#ui-layer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    padding: 14px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    color: white;
+    text-shadow: 2px 2px 0 #000;
+    font-size: 20px;
+    z-index: 10;
+}
+
+#lives-container { color: #ff4757; letter-spacing: 2px; }
+
+#combo-display {
+    position: absolute;
+    top: 64px; left: 50%;
+    transform: translateX(-50%);
+    color: #ffd32a;
+    font-size: 24px;
+    text-shadow: 2px 2px 0 #000, 0 0 12px rgba(255,211,42,0.6);
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s;
+    white-space: nowrap;
+}
+
+/* Pause button */
+#pause-btn {
+    position: absolute;
+    top: 10px; right: 14px;
+    padding: 6px 13px;
+    font-size: 18px;
+    font-family: 'Fredoka One', cursive;
+    background: rgba(0,0,0,0.35);
+    color: white;
+    border: 2px solid rgba(255,255,255,0.55);
+    border-radius: 10px;
+    cursor: pointer;
+    z-index: 11;
+    pointer-events: all;
+    transition: background 0.15s, transform 0.1s;
+    display: none;
+}
+#pause-btn:active { transform: scale(0.93); }
+
+canvas {
+    display: block;
+    width: 100%; height: 100%;
+    position: relative;
+    z-index: 2;
+}
+
+/* Flash overlay for damage */
+#flash-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255,0,0,0);
+    pointer-events: none;
+    z-index: 8;
+}
+
+/* Touch controls: Ora copre tutto lo schermo per un trascinamento fluido */
+#touch-controls {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+}
+
+/* === OVERLAY SCREENS === */
+.overlay-screen {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    z-index: 20;
+    text-align: center;
+}
+
+/* Start Screen */
+#start-screen {
+    background: linear-gradient(160deg, rgba(30,60,90,0.85), rgba(60,20,60,0.85));
+}
+
+#start-screen .game-title {
+    font-size: 46px;
+    line-height: 1.1;
+    color: #ffd32a;
+    text-shadow: 3px 3px 0 #000, 0 0 20px rgba(255,211,42,0.5);
+    margin-bottom: 16px;
+    animation: titlePulse 2s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+}
+
+#start-screen .instructions {
+    font-size: 17px;
+    max-width: 78%;
+    line-height: 1.6;
+    margin-bottom: 10px;
+    color: rgba(255,255,255,0.9);
+}
+
+.legend {
+    display: flex;
+    gap: 18px;
+    margin: 16px 0 28px;
+    font-size: 15px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 85%;
+}
+
+.legend-item {
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 8px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.legend-item span:first-child { font-size: 26px; }
+
+.legend-item .good { color: #2ed573; }
+.legend-item .bad  { color: #ff4757; }
+
+/* Pause Screen */
+#pause-screen {
+    background: rgba(0,0,0,0.65);
+}
+#pause-screen h2 {
+    font-size: 44px;
+    color: #ffd32a;
+    text-shadow: 3px 3px 0 #000;
+    margin-bottom: 30px;
+}
+
+/* Game Over Screen */
+#game-over-screen {
+    background: linear-gradient(160deg, rgba(80,0,0,0.85), rgba(0,0,0,0.85));
+}
+#game-over-screen h1 {
+    font-size: 52px;
+    color: #ff4757;
+    text-shadow: 3px 3px 0 #000;
+    animation: goShake 0.4s ease-in-out;
+}
+
+@keyframes goShake {
+    0%,100% { transform: rotate(0deg); }
+    25% { transform: rotate(-3deg); }
+    75% { transform: rotate(3deg); }
+}
+
+#game-over-screen .score-line {
+    font-size: 26px;
+    margin: 6px 0;
+}
+
+#new-record {
+    font-size: 24px;
+    color: #ffd32a;
+    text-shadow: 0 0 12px rgba(255,211,42,0.7);
+    display: none;
+    margin: 6px 0 10px;
+    animation: titlePulse 1s ease-in-out infinite;
+}
+
+/* Buttons */
+.btn {
+    padding: 14px 34px;
+    font-size: 24px;
+    font-family: 'Fredoka One', cursive;
+    background: #2ed573;
+    color: white;
+    border: 4px solid white;
+    border-radius: 16px;
+    cursor: pointer;
+    margin-top: 14px;
+    transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 0 6px 0 #17a34a;
+}
+
+.btn:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #17a34a;
+}
+
+/* Volume controls (pause menu) */
+.volume-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin: 6px 0 8px;
+    width: 82%;
+    max-width: 260px;
+}
+.volume-controls label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 15px;
+    color: white;
+    text-shadow: 1px 1px 0 #000;
+}
+.volume-controls label span:first-child {
+    font-size: 20px;
+    width: 26px;
+    text-align: center;
+}
+.volume-controls input[type="range"] {
+    flex: 1;
+    accent-color: #2ed573;
+    height: 6px;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+
+    <img id="trattore-bg" class="bg-decoration" src="trattore.png" alt="Trattore">
+    <img id="cartello-bg" class="bg-decoration" src="cartello.png" alt="Cartello">
+
+    <div id="ui-layer">
+        <div>
+            <div>Punti: <span id="scoreText">0</span></div>
+            <div style="font-size:14px;color:#ffd32a;">
+                Record: <span id="highScoreText">0</span>
+            </div>
+        </div>
+        <div id="lives-container">❤️❤️❤️</div>
+    </div>
+
+    <div id="combo-display"></div>
+    <div id="flash-overlay"></div>
+    <button id="pause-btn">⏸</button>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="touch-controls"></div>
+
+    <div id="start-screen" class="overlay-screen" style="display:flex;">
+        <div class="game-title">
+            <img src="radicchio.png" alt="Radicchio" style="width: 100px; height: 100px; vertical-align: middle; margin-bottom: 2px;"> 
+            Ciapa<br>el Radicio!
+        </div>
+        <p class="instructions">Usa le frecce su PC o <b>trascina il dito</b> su mobile per muovere il cesto. Attento agli ostacoli!</p>
+        <div class="legend" style="gap: 12px; max-width: 90%;">
+            <div class="legend-item" style="padding: 2px 8px; min-width: 110px;">
+                <img src="radicchio.png" alt="Radicchio" width="105" height="105" style="object-fit: contain; margin-bottom: 1px;">
+                <span class="good" style="font-size: 14px;">+1 punto</span>
+            </div>
+            <div class="legend-item" style="padding: 2px 8px; min-width: 110px;">
+                <img src="sasso.png" alt="Sasso" width="105" height="105" style="object-fit: contain; margin-bottom: 1px;">
+                <span class="bad" style="font-size: 14px;">−1 vita</span>
+            </div>
+            <div class="legend-item" style="padding: 2px 8px; min-width: 10px;">
+                <img src="corvo.png" alt="Corvo" width="105" height="105" style="object-fit: contain; margin-bottom: 1px;">
+                <span class="bad" style="font-size: 14px;">−1 vita</span>
+            </div>
+            <div class="legend-item" style="padding: 2px 8px; min-width: 110px;">
+                <img src="cavolo.png" alt="Cavolo" width="105" height="105" style="object-fit: contain; margin-bottom: 1px;">
+                <span class="bad" style="font-size: 14px;">−1 vita</span>
+            </div>
+        </div>
+        <button class="btn" onclick="startGame()">▶ Gioca!</button>
+    </div>
+
+    <div id="pause-screen" class="overlay-screen">
+        <h2>Pausa</h2>
+        <div class="volume-controls">
+            <label>
+                <span>🎵</span>
+                <input type="range" id="musicVolumeSlider" min="0" max="100" value="50">
+            </label>
+            <label>
+                <span>🔊</span>
+                <input type="range" id="sfxVolumeSlider" min="0" max="100" value="50">
+            </label>
+        </div>
+        <button class="btn" onclick="resumeGame()">▶ Riprendi</button>
+    </div>
+
+    <div id="game-over-screen" class="overlay-screen">
+        <h1>GAME OVER</h1>
+        <p class="score-line">Radici raccolti: <span id="finalScore">0</span></p>
+        <p id="new-record">🏆 Nuovo Record!</p>
+        <button class="btn" onclick="resetGame()">Rigioca</button>
+    </div>
+
+</div>
+
+<script>
+const canvas  = document.getElementById('gameCanvas');
+const ctx     = canvas.getContext('2d');
+
+const scoreText      = document.getElementById('scoreText');
+const highScoreText  = document.getElementById('highScoreText');
+const livesContainer = document.getElementById('lives-container');
+const gameOverScreen = document.getElementById('game-over-screen');
+const finalScoreEl   = document.getElementById('finalScore');
+const newRecordEl    = document.getElementById('new-record');
+const flashOverlay   = document.getElementById('flash-overlay');
+const comboDisplay   = document.getElementById('combo-display');
+const pauseBtn       = document.getElementById('pause-btn');
+
+let score       = 0;
+let highScore   = parseInt(localStorage.getItem('radicchioHighScore') || '0');
+let lives       = 3;
+let frameCount  = 0;
+let gameLoopId;
+let isGameOver  = false;
+let isPaused    = false;
+let gameStarted = false;
+let combo       = 0;
+let shakeFrames = 0;
+let floatingTexts = [];
+let particles     = [];
+let fallingItems  = [];
+
+highScoreText.innerText = highScore;
+
+// ---- AUDIO ----
+let musicVolume = parseFloat(localStorage.getItem('radicchioMusicVolume'));
+if (isNaN(musicVolume)) musicVolume = 0.5;
+let sfxVolume = parseFloat(localStorage.getItem('radicchioSfxVolume'));
+if (isNaN(sfxVolume)) sfxVolume = 0.5;
+
+const music = new Audio('musica.mp3');
+music.loop = true;
+music.volume = musicVolume;
+
+function tryPlayMusic() {
+    music.play().catch(() => {});
+}
+tryPlayMusic();
+// I browser bloccano l'autoplay finché l'utente non interagisce: riprova al primo tocco/click/tasto
+['click', 'touchstart', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, tryPlayMusic, { once: true });
+});
+
+const sfxSources = {
+    radicchio: 'radicchio.mp3',
+    sasso:     'sasso.mp3',
+    corvo:     'corvo.mp3',
+    cavolo:    'marcio.mp3',
+    perdere:   'perdere.mp3',
+    applausi:  'applausi.mp3'
+};
+
+function playSfx(name) {
+    const src = sfxSources[name];
+    if (!src) return;
+    const audio = new Audio(src);
+    audio.volume = sfxVolume;
+    audio.play().catch(() => {});
+}
+
+const musicVolumeSlider = document.getElementById('musicVolumeSlider');
+const sfxVolumeSlider   = document.getElementById('sfxVolumeSlider');
+musicVolumeSlider.value = Math.round(musicVolume * 100);
+sfxVolumeSlider.value   = Math.round(sfxVolume * 100);
+
+musicVolumeSlider.addEventListener('input', () => {
+    musicVolume = musicVolumeSlider.value / 100;
+    music.volume = musicVolume;
+    localStorage.setItem('radicchioMusicVolume', musicVolume);
+});
+sfxVolumeSlider.addEventListener('input', () => {
+    sfxVolume = sfxVolumeSlider.value / 100;
+    localStorage.setItem('radicchioSfxVolume', sfxVolume);
+});
+
+// Player
+const player = { x:0, y:0, width:90, height:90, speed:7, dx:0 };
+
+// Item catalogue
+const ITEM_TYPES = [
+    { type:'good', name:'radicchio', probability:60 },
+    { type:'bad',  name:'sasso',     probability:15 },
+    { type:'bad',  name:'corvo',     probability:10 },
+    { type:'bad',  name:'cavolo',    probability:15 }
+];
+
+// Image loading
+const images = {};
+['radicchio','sasso','corvo','cavolo','cesto'].forEach(name => {
+    images[name] = new Image();
+    images[name].src = name + '.png';
+});
+
+// Canvas sizing
+function resizeCanvas() {
+    const c = document.getElementById('game-container');
+    canvas.width  = c.clientWidth;
+    canvas.height = c.clientHeight;
+    player.y = canvas.height - player.height - 20;
+    if (player.x === 0) player.x = canvas.width / 2 - player.width / 2;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ---- INPUT ----
+
+// Controlli tastiera per PC
+document.addEventListener('keydown', e => {
+    if (!gameStarted || isGameOver) return;
+    if (e.key === 'ArrowLeft')  player.dx = -player.speed;
+    if (e.key === 'ArrowRight') player.dx =  player.speed;
+    if (e.key === 'Escape' || e.key.toLowerCase() === 'p') togglePause();
+});
+document.addEventListener('keyup', e => {
+    if (e.key === 'ArrowLeft'  && player.dx < 0) player.dx = 0;
+    if (e.key === 'ArrowRight' && player.dx > 0) player.dx = 0;
+});
+
+// Controlli Touch Fluidi
+const touchControls = document.getElementById('touch-controls');
+
+function handleTouch(e) {
+    if (!gameStarted || isGameOver || isPaused) return;
+    e.preventDefault(); // Evita lo scrolling della pagina
+    
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    
+    // Fattore di scala tra coordinate CSS e coordinate interne del canvas
+    const scaleX = canvas.width / rect.width;
+    
+    // Calcola la X rispetto al canvas, corretta per il fattore di scala
+    let touchX = (touch.clientX - rect.left) * scaleX;
+    
+    // Posiziona il cesto centrato rispetto al dito
+    player.x = touchX - player.width / 2;
+    
+    // Impedisci al cesto di uscire dallo schermo
+    player.x = Math.max(0, Math.min(player.x, canvas.width - player.width));
+}
+
+touchControls.addEventListener('touchstart', handleTouch, { passive: false });
+touchControls.addEventListener('touchmove', handleTouch, { passive: false });
+touchControls.addEventListener('touchend', e => {
+    if (!gameStarted || isGameOver || isPaused) return;
+    e.preventDefault();
+}, { passive: false });
+
+
+pauseBtn.addEventListener('click', togglePause);
+
+// ---- PAUSE ----
+function togglePause() {
+    if (!gameStarted || isGameOver) return;
+    isPaused = !isPaused;
+    if (isPaused) {
+        cancelAnimationFrame(gameLoopId);
+        player.dx = 0;
+        document.getElementById('pause-screen').style.display = 'flex';
+        pauseBtn.innerText = '▶';
+    } else {
+        resumeGame();
+    }
+}
+window.resumeGame = function () {
+    isPaused = false;
+    document.getElementById('pause-screen').style.display = 'none';
+    pauseBtn.innerText = '⏸';
+    update();
+};
+
+// ---- EFFECTS ----
+
+// Red flash on hit
+function triggerFlash() {
+    flashOverlay.style.transition = 'none';
+    flashOverlay.style.background = 'rgba(255,0,0,0.4)';
+    requestAnimationFrame(() => {
+        flashOverlay.style.transition = 'background 0.35s ease';
+        flashOverlay.style.background = 'rgba(255,0,0,0)';
+    });
+    shakeFrames = 14;
+}
+
+// Floating "+1" text
+function spawnFloatingText(x, y, text, color) {
+    floatingTexts.push({ x, y, text, color, alpha:1, vy:-2.2, life:55 });
+}
+function updateFloatingTexts() {
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const ft = floatingTexts[i];
+        ft.y += ft.vy;
+        ft.vy *= 0.97;
+        ft.life--;
+        ft.alpha = ft.life / 55;
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+    }
+}
+function drawFloatingTexts() {
+    floatingTexts.forEach(ft => {
+        ctx.save();
+        ctx.globalAlpha = ft.alpha;
+        ctx.font = 'bold 30px "Fredoka One", cursive';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = ft.color;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 6;
+        ctx.fillText(ft.text, ft.x, ft.y);
+        ctx.restore();
+    });
+}
+
+// Particle burst on good catch
+function spawnParticles(x, y) {
+    const colors = ['#c0392b','#e74c3c','#9b59b6','#8e44ad','#ff6b81','#fff'];
+    for (let i = 0; i < 10; i++) {
+        const angle = (Math.PI * 2 / 10) * i + Math.random() * 0.3;
+        const spd   = 2.5 + Math.random() * 3.5;
+        particles.push({
+            x, y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd - 1.5,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            size: 4 + Math.random() * 4,
+            life: 42,
+            maxLife: 42
+        });
+    }
+}
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x  += p.vx;
+        p.y  += p.vy;
+        p.vy += 0.18;
+        p.vx *= 0.97;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+}
+function drawParticles() {
+    particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    });
+}
+
+// Combo display
+function updateComboDisplay() {
+    if (combo >= 3) {
+        comboDisplay.style.opacity = '1';
+        const flames = combo >= 10 ? '🔥🔥🔥' : combo >= 6 ? '🔥🔥' : '🔥';
+        comboDisplay.innerText = `${flames} Combo x${combo}!`;
+    } else {
+        comboDisplay.style.opacity = '0';
+    }
+}
+
+// ---- PLAYER ----
+function drawPlayer() {
+    ctx.drawImage(images.cesto, player.x, player.y, player.width, player.height);
+}
+
+// ---- SPAWN ----
+function spawnItem() {
+    const spawnRate = Math.max(22, 78 - Math.floor(score / 4));
+    if (frameCount % spawnRate !== 0) return;
+
+    let rand = Math.random() * 100, cumulative = 0;
+    let selectedType = ITEM_TYPES[0];
+    for (const t of ITEM_TYPES) {
+        cumulative += t.probability;
+        if (rand <= cumulative) { selectedType = t; break; }
+    }
+
+    const size  = 105;
+    const speed = Math.min(3 + Math.random() * 2.5 + score * 0.04, 10.5);
+
+    fallingItems.push({
+        x: Math.random() * (canvas.width - size),
+        y: -size,
+        width: size, height: size,
+        speed,
+        rotation: (Math.random() - 0.5) * 0.6,
+        rotSpeed:  (Math.random() - 0.5) * 0.06,
+        data: selectedType
+    });
+}
+
+// ---- LIVES ----
+function updateLivesDisplay() {
+    livesContainer.innerText = '❤️'.repeat(Math.max(0, lives));
+}
+
+// ---- GAME OVER ----
+function gameOver() {
+    isGameOver = true;
+    cancelAnimationFrame(gameLoopId);
+    pauseBtn.style.display = 'none';
+
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('radicchioHighScore', highScore);
+        highScoreText.innerText = highScore;
+        newRecordEl.style.display = 'block';
+        playSfx('applausi');
+    } else {
+        newRecordEl.style.display = 'none';
+        playSfx('perdere');
+    }
+
+    finalScoreEl.innerText  = score;
+    gameOverScreen.style.display = 'flex';
+}
+
+// ---- MAIN LOOP ----
+function update() {
+    if (isGameOver || isPaused) return;
+
+    // Screen shake offset
+    let sx = 0, sy = 0;
+    if (shakeFrames > 0) {
+        const intensity = shakeFrames * 0.55;
+        sx = (Math.random() - 0.5) * intensity;
+        sy = (Math.random() - 0.5) * intensity;
+        shakeFrames--;
+    }
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40);
+
+    // Movimento del giocatore (tramite frecce tastiera)
+    player.x = Math.max(0, Math.min(player.x + player.dx, canvas.width - player.width));
+    drawPlayer();
+
+    spawnItem();
+
+    for (let i = fallingItems.length - 1; i >= 0; i--) {
+        const item = fallingItems[i];
+        item.y        += item.speed;
+        item.rotation += item.rotSpeed;
+
+        ctx.save();
+        ctx.translate(item.x + item.width / 2, item.y + item.height / 2);
+        ctx.rotate(item.rotation);
+        ctx.drawImage(images[item.data.name], -item.width / 2, -item.height / 2, item.width, item.height);
+        ctx.restore();
+
+        const mg = 14;
+        const hitX = item.x + item.width - mg > player.x + mg &&
+                     item.x + mg < player.x + player.width - mg;
+        const hitY = item.y + item.height     > player.y + mg &&
+                     item.y                   < player.y + player.height;
+
+        if (hitX && hitY) {
+            playSfx(item.data.name);
+            if (item.data.type === 'good') {
+                const bonus = (combo > 0 && combo % 5 === 0) ? 2 : 1;
+                score += bonus;
+                combo++;
+                scoreText.innerText = score;
+                spawnFloatingText(
+                    item.x + item.width / 2,
+                    item.y,
+                    bonus > 1 ? `+${bonus} 🔥` : '+1',
+                    '#ffd32a'
+                );
+                spawnParticles(item.x + item.width / 2, item.y + item.height / 2);
+                updateComboDisplay();
+            } else {
+                combo = 0;
+                updateComboDisplay();
+                lives--;
+                updateLivesDisplay();
+                triggerFlash();
+                spawnFloatingText(item.x + item.width / 2, item.y, '💔 -1', '#ff4757');
+                if (lives <= 0) { ctx.restore(); gameOver(); return; }
+            }
+            fallingItems.splice(i, 1);
+            continue;
+        }
+
+        if (item.y > canvas.height) fallingItems.splice(i, 1);
+    }
+
+    updateParticles();   drawParticles();
+    updateFloatingTexts(); drawFloatingTexts();
+
+    ctx.restore();
+    frameCount++;
+    gameLoopId = requestAnimationFrame(update);
+}
+
+// ---- START / RESET ----
+window.startGame = function () {
+    document.getElementById('start-screen').style.display = 'none';
+    pauseBtn.style.display = 'block';
+    gameStarted = true;
+    update();
+};
+
+window.resetGame = function () {
+    score = 0; lives = 3; frameCount = 0; combo = 0; shakeFrames = 0;
+    fallingItems = []; floatingTexts = []; particles = [];
+    isGameOver = false; isPaused = false;
+    player.x = canvas.width / 2 - player.width / 2;
+    scoreText.innerText = score;
+    updateLivesDisplay();
+    updateComboDisplay();
+    gameOverScreen.style.display = 'none';
+    pauseBtn.style.display = 'block';
+    pauseBtn.innerText = '⏸';
+    update();
+};
+</script>
+
+</body>
+</html>
