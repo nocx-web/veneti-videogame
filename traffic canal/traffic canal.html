@@ -785,15 +785,30 @@ window.addEventListener("keydown",e=>{
   if(e.code==="ArrowLeft"||e.code==="KeyA")  moveLeft();
   if(e.code==="ArrowRight"||e.code==="KeyD") moveRight();
 });
-document.getElementById("touch-left").addEventListener("touchstart",e=>{e.preventDefault();if(state==="playing")moveLeft();},{passive:false});
-document.getElementById("touch-right").addEventListener("touchstart",e=>{e.preventDefault();if(state==="playing")moveRight();},{passive:false});
-canvas.addEventListener("touchstart",e=>{
-  e.preventDefault();
+document.getElementById("touch-left").addEventListener("touchstart",e=>{e.preventDefault();},{passive:false});
+document.getElementById("touch-right").addEventListener("touchstart",e=>{e.preventDefault();},{passive:false});
+
+let swipeStartX=null, swipeLastX=null;
+const SWIPE_THRESHOLD=30;
+
+window.addEventListener("touchstart",e=>{
   if(state!=="playing") return;
-  const r=canvas.getBoundingClientRect();
-  const tx=(e.touches[0].clientX-r.left)*(W/r.width);
-  if(tx<W/2) moveLeft(); else moveRight();
+  swipeStartX=e.touches[0].clientX;
+  swipeLastX=swipeStartX;
+},{passive:true});
+
+window.addEventListener("touchmove",e=>{
+  if(state!=="playing"||swipeLastX===null) return;
+  e.preventDefault();
+  const currentX=e.touches[0].clientX;
+  const dx=currentX-swipeLastX;
+  if(dx>SWIPE_THRESHOLD){ moveRight(); swipeLastX=currentX; }
+  else if(dx<-SWIPE_THRESHOLD){ moveLeft(); swipeLastX=currentX; }
 },{passive:false});
+
+window.addEventListener("touchend",()=>{
+  swipeStartX=null; swipeLastX=null;
+},{passive:true});
 </script>
 </body>
 </html>

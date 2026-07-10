@@ -877,6 +877,8 @@ gc.addEventListener('mouseup',e=>{
 
   let rightTouchId = null;   // touch id holding right side
   let leftTouchId  = null;   // touch id dragging left side
+  let leftLastRawAngle = 0;  // last raw (unamplified) aim angle, used to compute deltas
+  const AIM_SENSITIVITY = 2.2; // >1 = piu' sensibile: piccoli movimenti del dito ruotano di piu' la mira
 
   function canvasCoords(touch){
     const r = gc.getBoundingClientRect();
@@ -903,7 +905,8 @@ gc.addEventListener('mouseup',e=>{
         if(leftTouchId === null){
           leftTouchId = t.identifier;
           // update aim immediately
-          bottle.angle = Math.atan2(cy - (bottle.y - bottle.h*.44), cx - bottle.x);
+          leftLastRawAngle = Math.atan2(cy - (bottle.y - bottle.h*.44), cx - bottle.x);
+          bottle.angle = leftLastRawAngle;
           extraBottles.forEach(eb=>{
             eb.angle = Math.atan2(cy - (eb.y - eb.h*.44), cx - eb.x);
           });
@@ -918,11 +921,15 @@ gc.addEventListener('mouseup',e=>{
     for(const t of e.changedTouches){
       if(t.identifier === leftTouchId){
         const {cx,cy} = canvasCoords(t);
-        // Update aim angle toward touch position
-        bottle.angle = Math.atan2(cy - (bottle.y - bottle.h*.44), cx - bottle.x);
-        extraBottles.forEach(eb=>{
-          eb.angle = Math.atan2(cy - (eb.y - eb.h*.44), cx - eb.x);
-        });
+        // Compute raw angle change since last move, then amplify it for a more sensitive feel
+        const rawAngle = Math.atan2(cy - (bottle.y - bottle.h*.44), cx - bottle.x);
+        let delta = rawAngle - leftLastRawAngle;
+        if(delta > Math.PI) delta -= Math.PI*2;
+        if(delta < -Math.PI) delta += Math.PI*2;
+        const amplified = delta * AIM_SENSITIVITY;
+        bottle.angle += amplified;
+        extraBottles.forEach(eb=>{ eb.angle += amplified; });
+        leftLastRawAngle = rawAngle;
       }
     }
   }, {passive:false});
