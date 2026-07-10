@@ -215,7 +215,7 @@ canvas { display:block; width:100%; height:100%; }
       <span>🏆 Record</span>
       <span class="best-val" id="start-best">0</span>
     </div>
-    <div class="controls-hint">← → / A D per virare<br>Tocca sinistra o destra su mobile</div>
+    <div class="controls-hint">← → / A D per virare<br>Tocca lo schermo a sinistra o a destra per spostarti</div>
     <button class="btn-primary" id="btn-start">⚓&nbsp; SALPA</button>
   </div>
 
@@ -785,8 +785,38 @@ window.addEventListener("keydown",e=>{
   if(e.code==="ArrowLeft"||e.code==="KeyA")  moveLeft();
   if(e.code==="ArrowRight"||e.code==="KeyD") moveRight();
 });
-document.getElementById("touch-left").addEventListener("touchstart",e=>{e.preventDefault();},{passive:false});
-document.getElementById("touch-right").addEventListener("touchstart",e=>{e.preventDefault();},{passive:false});
+let touchLeftStartX=null, touchLeftStartY=null, touchRightStartX=null, touchRightStartY=null;
+const TAP_MOVE_TOLERANCE=12;
+
+document.getElementById("touch-left").addEventListener("touchstart",e=>{
+  e.preventDefault();
+  touchLeftStartX=e.touches[0].clientX;
+  touchLeftStartY=e.touches[0].clientY;
+},{passive:false});
+document.getElementById("touch-left").addEventListener("touchend",e=>{
+  e.preventDefault();
+  if(state!=="playing"||touchLeftStartX===null) return;
+  const t=e.changedTouches[0];
+  if(Math.abs(t.clientX-touchLeftStartX)<TAP_MOVE_TOLERANCE && Math.abs(t.clientY-touchLeftStartY)<TAP_MOVE_TOLERANCE) {
+    moveLeft();
+  }
+  touchLeftStartX=null; touchLeftStartY=null;
+},{passive:false});
+
+document.getElementById("touch-right").addEventListener("touchstart",e=>{
+  e.preventDefault();
+  touchRightStartX=e.touches[0].clientX;
+  touchRightStartY=e.touches[0].clientY;
+},{passive:false});
+document.getElementById("touch-right").addEventListener("touchend",e=>{
+  e.preventDefault();
+  if(state!=="playing"||touchRightStartX===null) return;
+  const t=e.changedTouches[0];
+  if(Math.abs(t.clientX-touchRightStartX)<TAP_MOVE_TOLERANCE && Math.abs(t.clientY-touchRightStartY)<TAP_MOVE_TOLERANCE) {
+    moveRight();
+  }
+  touchRightStartX=null; touchRightStartY=null;
+},{passive:false});
 
 let swipeStartX=null, swipeLastX=null;
 const SWIPE_THRESHOLD=30;
