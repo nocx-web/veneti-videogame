@@ -421,10 +421,28 @@ const sfxSources = {
     applausi:  'applausi.mp3'
 };
 
+// Pool di Audio pre-caricati per ogni effetto: riutilizzarli evita di dover
+// creare e decodificare un nuovo file ad ogni singolo colpo/cattura, che sul
+// thread principale causava micro-scatti proprio mentre gli oggetti cadevano.
+const SFX_POOL_SIZE = 3;
+const sfxPools = {};
+Object.entries(sfxSources).forEach(([name, src]) => {
+    sfxPools[name] = {
+        elements: Array.from({ length: SFX_POOL_SIZE }, () => {
+            const a = new Audio(src);
+            a.preload = 'auto';
+            return a;
+        }),
+        index: 0
+    };
+});
+
 function playSfx(name) {
-    const src = sfxSources[name];
-    if (!src) return;
-    const audio = new Audio(src);
+    const pool = sfxPools[name];
+    if (!pool) return;
+    const audio = pool.elements[pool.index];
+    pool.index = (pool.index + 1) % pool.elements.length;
+    audio.currentTime = 0;
     audio.volume = sfxVolume;
     audio.play().catch(() => {});
 }
@@ -447,6 +465,13 @@ sfxVolumeSlider.addEventListener('input', () => {
 // Player
 const player = { x:0, y:0, width:90, height:90, speed:7, dx:0 };
 
+// Dimensioni "logiche" (in pixel CSS) usate da tutta la logica di gioco.
+// Il canvas.width/height reale è più grande (scalato per il devicePixelRatio)
+// solo per la nitidezza del rendering, ma la logica lavora sempre in questo spazio.
+let logicalWidth  = 0;
+let logicalHeight = 0;
+let canvasRect    = null; // cache di getBoundingClientRect, aggiornata solo al resize
+
 // Item catalogue
 const ITEM_TYPES = [
     { type:'good', name:'radicchio', probability:60 },
@@ -465,10 +490,25 @@ const images = {};
 // Canvas sizing
 function resizeCanvas() {
     const c = document.getElementById('game-container');
-    canvas.width  = c.clientWidth;
-    canvas.height = c.clientHeight;
-    player.y = canvas.height - player.height - 20;
-    if (player.x === 0) player.x = canvas.width / 2 - player.width / 2;
+    logicalWidth  = c.clientWidth;
+    logicalHeight = c.clientHeight;
+
+    // Cap a 2 per non appesantire troppo i telefoni con dpr 3
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.width  = logicalWidth  * dpr;
+    canvas.height = logicalHeight * dpr;
+    canvas.style.width  = logicalWidth  + 'px';
+    canvas.style.height = logicalHeight + 'px';
+
+    // Da qui in poi tutti i disegni possono continuare a usare coordinate
+    // "logiche" (CSS px): il canvas fisico è più denso ma la scala compensa.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    canvasRect = canvas.getBoundingClientRect();
+
+    player.y = logicalHeight - player.height - 20;
+    if (player.x === 0) player.x = logicalWidth / 2 - player.width / 2;
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -495,19 +535,17 @@ function handleTouch(e) {
     e.preventDefault(); // Evita lo scrolling della pagina
     
     const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    
-    // Fattore di scala tra coordinate CSS e coordinate interne del canvas
-    const scaleX = canvas.width / rect.width;
-    
-    // Calcola la X rispetto al canvas, corretta per il fattore di scala
-    let touchX = (touch.clientX - rect.left) * scaleX;
-    
+    const rect = canvasRect || canvas.getBoundingClientRect();
+
+    // Coordinate in pixel CSS (spazio "logico"): niente più chiamata a
+    // getBoundingClientRect() ad ogni touchmove, che forzava un reflow sincrono.
+    let touchX = touch.clientX - rect.left;
+
     // Posiziona il cesto centrato rispetto al dito
     player.x = touchX - player.width / 2;
-    
+
     // Impedisci al cesto di uscire dallo schermo
-    player.x = Math.max(0, Math.min(player.x, canvas.width - player.width));
+    player.x = Math.max(0, Math.min(player.x, logicalWidth - player.width));
 }
 
 touchControls.addEventListener('touchstart', handleTouch, { passive: false });
@@ -573,9 +611,10 @@ function drawFloatingTexts() {
         ctx.globalAlpha = ft.alpha;
         ctx.font = 'bold 30px "Fredoka One", cursive';
         ctx.textAlign = 'center';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+        ctx.strokeText(ft.text, ft.x, ft.y);
         ctx.fillStyle = ft.color;
-        ctx.shadowColor = 'rgba(0,0,0,0.8)';
-        ctx.shadowBlur = 6;
         ctx.fillText(ft.text, ft.x, ft.y);
         ctx.restore();
     });
@@ -614,8 +653,6 @@ function drawParticles() {
         ctx.save();
         ctx.globalAlpha = p.life / p.maxLife;
         ctx.fillStyle = p.color;
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -655,7 +692,7 @@ function spawnItem() {
     const speed = Math.min(3 + Math.random() * 2.5 + score * 0.04, 10.5);
 
     fallingItems.push({
-        x: Math.random() * (canvas.width - size),
+        x: Math.random() * (logicalWidth - size),
         y: -size,
         width: size, height: size,
         speed,
@@ -706,10 +743,10 @@ function update() {
 
     ctx.save();
     ctx.translate(sx, sy);
-    ctx.clearRect(-20, -20, canvas.width + 40, canvas.height + 40);
+    ctx.clearRect(-20, -20, logicalWidth + 40, logicalHeight + 40);
 
     // Movimento del giocatore (tramite frecce tastiera)
-    player.x = Math.max(0, Math.min(player.x + player.dx, canvas.width - player.width));
+    player.x = Math.max(0, Math.min(player.x + player.dx, logicalWidth - player.width));
     drawPlayer();
 
     spawnItem();
@@ -759,7 +796,7 @@ function update() {
             continue;
         }
 
-        if (item.y > canvas.height) fallingItems.splice(i, 1);
+        if (item.y > logicalHeight) fallingItems.splice(i, 1);
     }
 
     updateParticles();   drawParticles();
@@ -782,7 +819,7 @@ window.resetGame = function () {
     score = 0; lives = 3; frameCount = 0; combo = 0; shakeFrames = 0;
     fallingItems = []; floatingTexts = []; particles = [];
     isGameOver = false; isPaused = false;
-    player.x = canvas.width / 2 - player.width / 2;
+    player.x = logicalWidth / 2 - player.width / 2;
     scoreText.innerText = score;
     updateLivesDisplay();
     updateComboDisplay();
