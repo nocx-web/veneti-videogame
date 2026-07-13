@@ -5,6 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Memory Veneto 1vs1</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦁</text></svg>">
+<!-- Preload di tutte le immagini delle carte: il browser comincia a scaricarle
+     subito, mentre i giocatori scrivono i nomi, invece di aspettare il primo flip -->
+<link rel="preload" as="image" href="normale.png">
+<link rel="preload" as="image" href="spritz.png">
+<link rel="preload" as="image" href="crocal.png">
+<link rel="preload" as="image" href="colombo.png">
+<link rel="preload" as="image" href="gondoa.png">
+<link rel="preload" as="image" href="mascara.png">
+<link rel="preload" as="image" href="radicio.png">
+<link rel="preload" as="image" href="vigna.png">
+<link rel="preload" as="image" href="bandiera.png">
+<link rel="preload" as="image" href="vin.png">
+<link rel="preload" as="image" href="prosecco.png">
+<link rel="preload" as="image" href="asiago.png">
+<link rel="preload" as="image" href="leon.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html{height:100%}
@@ -486,6 +501,7 @@ body{
       </div>
     </div>
     <button id="btn-start">▶ INIZIA LA PARTITA</button>
+    <div id="preload-status" style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.4)"></div>
   </div>
 </div>
 
@@ -597,6 +613,31 @@ let PNAMES=['P1','P2'];
 let flipped=[],matched=[],cur=0,scores=[0,0],lock=false,pItems=[[],[]];
 let difficulty='easy'; // 'easy' | 'hard'
 
+/* ── PRELOAD IMMAGINI ──
+   Scarica e decodifica subito tutti i PNG delle carte (12 fronti + retro),
+   mentre i giocatori sono ancora sulla schermata nomi, così quando iniziano
+   a giocare le immagini sono già in cache e i flip sono istantanei. */
+const ALL_CARD_IMAGES=[...ITEMS.map(i=>i+'.png'),'normale.png'];
+let preloadedCount=0;
+function preloadCardImages(){
+  const statusEl=document.getElementById('preload-status');
+  ALL_CARD_IMAGES.forEach(src=>{
+    const img=new Image();
+    img.onload=img.onerror=()=>{
+      preloadedCount++;
+      if(statusEl){
+        if(preloadedCount<ALL_CARD_IMAGES.length){
+          statusEl.textContent='Caricamento carte… '+preloadedCount+'/'+ALL_CARD_IMAGES.length;
+        } else {
+          statusEl.textContent='';
+        }
+      }
+    };
+    img.src=src;
+  });
+}
+preloadCardImages();
+
 /* ── AUDIO ── */
 const sndCarta=new Audio('carte.mp3');
 const sndApplausi=new Audio('applausi.mp3');
@@ -657,12 +698,12 @@ function buildGrid(){
     const back=document.createElement('div');
     back.className='card-face card-back';
     const bi=document.createElement('img');
-    bi.src='normale.png';bi.alt='retro';
+    bi.src='normale.png';bi.alt='retro';bi.decoding='async';
     back.appendChild(bi);
     const front=document.createElement('div');
     front.className='card-face card-front';
     const fi=document.createElement('img');
-    fi.src=item+'.png';fi.alt=fmt(item);
+    fi.src=item+'.png';fi.alt=fmt(item);fi.decoding='async';
     front.appendChild(fi);
     inner.appendChild(back);
     inner.appendChild(front);

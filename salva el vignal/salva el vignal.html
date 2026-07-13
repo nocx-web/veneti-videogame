@@ -73,6 +73,20 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
 #powerup{position:absolute;top:106px;left:50%;transform:translateX(-50%);font-family:'Cinzel',serif;font-size:15px;font-weight:700;color:#ff9922;text-shadow:0 0 18px rgba(255,130,0,.95),0 0 36px rgba(255,80,0,.35);pointer-events:none;z-index:15;opacity:0;transition:opacity .3s;white-space:nowrap;letter-spacing:.1em}
 #buffsBar{position:absolute;top:64px;right:14px;display:flex;gap:6px;pointer-events:none;z-index:15}
 .buffIco{font-size:18px;background:rgba(0,0,0,.4);border:1px solid rgba(255,210,0,.35);border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(255,190,0,.25)}
+
+/* Pause button */
+#pauseBtn{position:absolute;top:66px;left:14px;width:34px;height:34px;border-radius:50%;background:rgba(255,210,0,.13);border:1.5px solid rgba(255,210,0,.32);display:flex;align-items:center;justify-content:center;font-size:15px;color:#FFD840;cursor:pointer;z-index:25;user-select:none;-webkit-user-select:none;touch-action:none;transition:background .15s}
+#pauseBtn:active,#pauseBtn.pressed{background:rgba(255,210,0,.3)}
+#pauseBtn.hidden{display:none}
+
+/* Pause banner — slim bar, leaves the rest of canvas free for dragging bonus bottles */
+#pauseBanner{position:absolute;top:62px;left:0;right:0;z-index:24;background:rgba(0,0,0,.74);border-bottom:1px solid rgba(255,210,0,.25);display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:14px;padding:10px 16px}
+#pauseBanner.hidden{display:none}
+#pauseBanner .pbText{font-family:'Cinzel',serif;font-size:11px;color:rgba(255,215,90,.9);letter-spacing:.06em;text-align:center;max-width:520px}
+#pauseBanner .btn{padding:6px 22px;font-size:11px}
+@media(max-width:1040px),(pointer:coarse){
+  #pauseBanner .pbText{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -95,7 +109,12 @@ canvas{display:block;position:absolute;top:0;left:0;width:100%;height:100%}
   <div id="combo"></div>
   <div id="powerup"></div>
   <div id="buffsBar"></div>
-  <div id="ctrl">← → Muovi &nbsp;|&nbsp; SPAZIO Carica e Spara &nbsp;|&nbsp; Mouse punta e spara</div>
+  <div id="pauseBtn" class="hidden" title="Pausa">⏸</div>
+  <div id="pauseBanner" class="hidden">
+    <div class="pbText">⏸ IN PAUSA — trascina le bottiglie bonus dove vuoi</div>
+    <button class="btn" id="resumeBtn">▶ Riprendi</button>
+  </div>
+  <div id="ctrl">← → Muovi &nbsp;|&nbsp; SPAZIO Carica e Spara &nbsp;|&nbsp; Mouse punta e spara &nbsp;|&nbsp; P Pausa</div>
   <div id="mArrows">
     <div class="mArrow" id="mLeft">◀</div>
     <div class="mArrow" id="mRight">▶</div>
@@ -793,6 +812,10 @@ document.addEventListener('keydown',e=>{
     charging=true;
     chargeTime=0;
   }
+  if((e.code==='KeyP'||e.code==='Escape')&&(state==='playing'||state==='paused')){
+    e.preventDefault();
+    togglePause();
+  }
 });
 document.addEventListener('keyup',e=>{
   if(e.code==='Space'&&state==='playing'&&charging){
@@ -804,7 +827,7 @@ document.addEventListener('keyup',e=>{
 
 // Mouse aim
 gc.addEventListener('mousemove',e=>{
-  if(state!=='playing') return;
+  if(state!=='playing' && state!=='paused') return;
   const r=gc.getBoundingClientRect();
   const mx=(e.clientX-r.left)*(W/r.width);
   const my=(e.clientY-r.top)*(H/r.height);
@@ -814,6 +837,7 @@ gc.addEventListener('mousemove',e=>{
     eb.y = clamp(my + drag.offY, H-220, H-40);
     return;
   }
+  if(state!=='playing') return; // no aiming while paused
   bottle.angle=Math.atan2(my-(bottle.y-bottle.h*.44), mx-bottle.x);
   extraBottles.forEach(eb=>{
     eb.angle=Math.atan2(my-(eb.y-eb.h*.44), mx-eb.x);
@@ -821,12 +845,14 @@ gc.addEventListener('mousemove',e=>{
 });
 
 gc.addEventListener('mousedown',e=>{
-  if(state!=='playing') return;
+  if(state!=='playing' && state!=='paused') return;
   const r=gc.getBoundingClientRect();
   const mx=(e.clientX-r.left)*(W/r.width);
   const my=(e.clientY-r.top)*(H/r.height);
 
   // Check drag on extra bottle — hit area is the full bottle sprite
+  // (works both while playing AND while paused, so bottles can be
+  // repositioned precisely with the game stopped)
   for(let i=0;i<extraBottles.length;i++){
     const eb=extraBottles[i];
     const hitW=eb.w*1.8, hitH=eb.h*1.2;
@@ -836,6 +862,7 @@ gc.addEventListener('mousedown',e=>{
       return;
     }
   }
+  if(state==='paused'){ e.preventDefault(); return; } // no shooting while paused
   // No bottle hit → start charge
   charging=true; chargeTime=0;
   e.preventDefault();
@@ -877,6 +904,7 @@ gc.addEventListener('mouseup',e=>{
 
   let rightTouchId = null;   // touch id holding right side
   let leftTouchId  = null;   // touch id dragging left side
+  let bottleDragTouchId = null; // touch id dragging a bonus bottle (works while playing & paused)
   let leftLastRawAngle = 0;  // last raw (unamplified) aim angle, used to compute deltas
   const AIM_SENSITIVITY = 2.2; // >1 = piu' sensibile: piccoli movimenti del dito ruotano di piu' la mira
 
@@ -888,11 +916,36 @@ gc.addEventListener('mouseup',e=>{
     };
   }
 
+  // Hit-test the bonus bottles (extraBottles) for a touch point — same hit area used by mouse
+  function hitTestExtraBottle(cx,cy){
+    for(let i=0;i<extraBottles.length;i++){
+      const eb=extraBottles[i];
+      const hitW=eb.w*1.8, hitH=eb.h*1.2;
+      if(Math.abs(cx-eb.x)<hitW && cy>eb.y-hitH && cy<eb.y+30) return i;
+    }
+    return -1;
+  }
+
   gc.addEventListener('touchstart', e=>{
-    if(state!=='playing') return;
+    if(state!=='playing' && state!=='paused') return;
     e.preventDefault();
     for(const t of e.changedTouches){
       const {cx,cy} = canvasCoords(t);
+
+      // Bonus-bottle drag — works both while playing and while paused,
+      // so bottles can be grabbed and repositioned on mobile too.
+      if(bottleDragTouchId===null){
+        const hitIdx = hitTestExtraBottle(cx,cy);
+        if(hitIdx!==-1){
+          bottleDragTouchId = t.identifier;
+          const eb=extraBottles[hitIdx];
+          drag = { idx: hitIdx, offX: eb.x-cx, offY: eb.y-cy };
+          continue;
+        }
+      }
+
+      if(state!=='playing') continue; // no aim/shoot while paused
+
       if(cx >= W * SPLIT){
         // RIGHT SIDE → start charge
         if(rightTouchId === null){
@@ -916,9 +969,17 @@ gc.addEventListener('mouseup',e=>{
   }, {passive:false});
 
   gc.addEventListener('touchmove', e=>{
-    if(state!=='playing') return;
+    if(state!=='playing' && state!=='paused') return;
     e.preventDefault();
     for(const t of e.changedTouches){
+      if(t.identifier === bottleDragTouchId && drag!==null){
+        const {cx,cy} = canvasCoords(t);
+        const eb=extraBottles[drag.idx];
+        eb.x = clamp(cx + drag.offX, 40, W-40);
+        eb.y = clamp(cy + drag.offY, H-220, H-40);
+        continue;
+      }
+      if(state!=='playing') continue;
       if(t.identifier === leftTouchId){
         const {cx,cy} = canvasCoords(t);
         // Compute raw angle change since last move, then amplify it for a more sensitive feel
@@ -937,6 +998,10 @@ gc.addEventListener('mouseup',e=>{
   gc.addEventListener('touchend', e=>{
     e.preventDefault();
     for(const t of e.changedTouches){
+      if(t.identifier === bottleDragTouchId){
+        bottleDragTouchId = null;
+        drag = null;
+      }
       if(t.identifier === rightTouchId){
         rightTouchId = null;
         if(state==='playing' && charging) releaseShot();
@@ -950,6 +1015,10 @@ gc.addEventListener('mouseup',e=>{
   gc.addEventListener('touchcancel', e=>{
     e.preventDefault();
     for(const t of e.changedTouches){
+      if(t.identifier === bottleDragTouchId){
+        bottleDragTouchId = null;
+        drag = null;
+      }
       if(t.identifier === rightTouchId){
         rightTouchId = null;
         if(state==='playing' && charging) releaseShot();
@@ -1004,12 +1073,49 @@ function startGame(){
   document.getElementById('combo').style.opacity='0';
   document.getElementById('powerup').style.opacity='0';
   ['scStart','scOver','scLevel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  document.getElementById('pauseBanner').classList.add('hidden');
+  const pBtnEl=document.getElementById('pauseBtn');
+  pBtnEl.classList.remove('hidden');
+  pBtnEl.textContent='⏸'; pBtnEl.title='Pausa';
   spawnWave();
   updateHUD(); updateDanger();
   state='playing';
   if(frameId) cancelAnimationFrame(frameId);
   last=performance.now(); loop(last);
 }
+
+// ═══════════════════════════════════
+// PAUSE
+// ═══════════════════════════════════
+function pauseGame(){
+  if(state!=='playing') return;
+  state='paused';
+  charging=false; chargeTime=0;
+  updateChargeUI();
+  document.getElementById('pauseBanner').classList.remove('hidden');
+  document.getElementById('pauseBtn').textContent='▶';
+  document.getElementById('pauseBtn').title='Riprendi';
+}
+function resumeGame(){
+  if(state!=='paused') return;
+  state='playing';
+  drag=null;
+  document.getElementById('pauseBanner').classList.add('hidden');
+  document.getElementById('pauseBtn').textContent='⏸';
+  document.getElementById('pauseBtn').title='Pausa';
+}
+function togglePause(){
+  if(state==='playing') pauseGame();
+  else if(state==='paused') resumeGame();
+}
+(function(){
+  const pBtn=document.getElementById('pauseBtn');
+  const rBtn=document.getElementById('resumeBtn');
+  ['click','touchstart'].forEach(ev=>{
+    pBtn.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); togglePause(); });
+    rBtn.addEventListener(ev,e=>{ e.preventDefault(); e.stopPropagation(); resumeGame(); });
+  });
+})();
 
 function nextLevel(){
   document.getElementById('scLevel').classList.add('hidden');
@@ -1050,6 +1156,8 @@ function doLevelUp(){
 
 function doGameOver(){
   if(state==='gameover'||state==='gameover_shown') return;
+  document.getElementById('pauseBtn').classList.add('hidden');
+  document.getElementById('pauseBanner').classList.add('hidden');
   state='gameover'; hailIntensity=0; goTimer=0;
   massHail(320);
   doShake(18,700); doFlash('rgba(255,30,30,.5)', 180);
@@ -1778,7 +1886,7 @@ function render(){
   });
 
   // Bottle
-  if(state==='playing'||state==='levelup') drawBottle();
+  if(state==='playing'||state==='levelup'||state==='paused') drawBottle();
 
   ctx.restore();
 }
@@ -1791,7 +1899,7 @@ function loop(ts){
   const dt=Math.min((ts-last)/16.667,3);
   last=ts;
   if(state!=='start'&&state!=='gameover_shown'){
-    update(dt);
+    if(state!=='paused') update(dt);
     render();
   }
 }
