@@ -19,13 +19,16 @@ html, body {
   display:flex; justify-content:center; align-items:center;
   font-family:'Cinzel',serif;
 }
+
+/* ── GAME SHELL ── */
 #game-shell {
   position:relative; width:400px; height:600px;
   border-radius:20px; overflow:hidden;
   box-shadow: 0 0 0 1px rgba(201,168,76,0.4), 0 0 60px rgba(0,0,0,0.9),
               0 0 120px rgba(0,100,150,0.15), inset 0 0 0 1px rgba(255,255,255,0.04);
+  transform-origin: center center; /* Necessario per lo scaling responsivo su mobile */
 }
-canvas { display:block; position:absolute; top:0; left:0; }
+canvas { display:block; position:absolute; top:0; left:0; width:100% !important; height:100% !important; }
 
 /* ── HUD ── */
 #hud { position:absolute; top:0; left:0; right:0; display:none; pointer-events:none; z-index:10; }
@@ -238,7 +241,7 @@ canvas { display:block; position:absolute; top:0; left:0; }
 
 <script>
 // ═══════════════════════════════════════════════════
-// TRAFFIC CANAL — Engine v5.1 (High-Res)
+// TRAFFIC CANAL — Engine v5.2 (High-Res & Mobile Scale)
 // ═══════════════════════════════════════════════════
 const canvas  = document.getElementById("game");
 const ctx     = canvas.getContext("2d");
@@ -246,14 +249,25 @@ const pCanvas = document.getElementById("particle-canvas");
 const pCtx    = pCanvas.getContext("2d");
 const W = 400, H = 600;
 
+// -- GESTIONE RESPONSIVA CELLULARI --
+function resizeGame() {
+  const shell = document.getElementById("game-shell");
+  // Calcola quanto rimpicciolire il gioco per farlo stare nello schermo
+  const scaleX = window.innerWidth / W;
+  const scaleY = window.innerHeight / H;
+  // Usa il valore minore tra X e Y per non tagliare nulla. Limita a 1 per non sgranare su PC
+  const scale = Math.min(scaleX, scaleY, 1);
+  shell.style.transform = `scale(${scale})`;
+}
+window.addEventListener("resize", resizeGame);
+resizeGame(); // Avvia al caricamento
+
 // Configurazione Retina/HiDPI
 const dpr = window.devicePixelRatio || 1;
 
 function setupCanvas(cvs, context) {
   cvs.width = W * dpr;
   cvs.height = H * dpr;
-  cvs.style.width = W + "px";
-  cvs.style.height = H + "px";
   context.scale(dpr, dpr);
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
@@ -652,7 +666,7 @@ function drawFallbackBridge(cy, bw, bh) {
   const g = ctx.createLinearGradient(0,cy-bh/2,0,cy+bh/2);
   g.addColorStop(0,"#8a7355"); 
   g.addColorStop(0.5,"#6b5a42"); 
-  g.addColorStop(1, "#4a3d2a"); // Fix applicato
+  g.addColorStop(1, "#4a3d2a");
   ctx.fillStyle=g; ctx.fillRect(0,cy-bh/2,bw,bh);
   ctx.save();
   ctx.globalCompositeOperation="destination-out";
